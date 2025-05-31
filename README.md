@@ -39,7 +39,7 @@ ATscroll({
   scrollbarWidth: "6px",
 });
 ```
-##Usage
+## Usage
 Just call ATscroll() with options. It automatically finds:
 
 - The <body> element
@@ -66,7 +66,7 @@ ATscroll({
 | `autoHide` | `"none"` \| `"leave"` | `"leave"` | `"none"` = always visible, `"leave"` = hides when mouse leaves container |
 | `scrollbarWidth` | `string` | `"6px"` | Width of the scrollbar track (must include px/rem units) |
 
-##Tailwind CSS Integration
+## Tailwind CSS Integration
 Make sure you enable class-based dark mode in your Tailwind config:
 ```bash
 // tailwind.config.js
@@ -80,7 +80,7 @@ Use the dark class on <html> or <body> to enable dark mode:
 <html class="dark">
 ```
 
-##How It Works
+## How It Works
 - Wraps each scrollable element (body and any with Tailwind overflow classes) in a container
 - Hides native scrollbar via CSS globally
 - Adds a custom scrollbar element absolutely positioned on the right side
