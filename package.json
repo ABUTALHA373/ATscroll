@@ -1,0 +1,32 @@
+{
+  "name": "atscroll",
+  "version": "1.0.0",
+  "description": "A custom JavaScript scrollbar replacement with light/dark mode support and Tailwind compatibility.",
+  "main": "dist/atscroll.min.js",
+  "module": "src/atscroll.js",
+  "scripts": {
+    "build": "esbuild src/atscroll.js --bundle --minify --outfile=dist/atscroll.min.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ABUTALHA373/ATscroll.git"
+  },
+  "keywords": [
+    "scrollbar",
+    "custom",
+    "tailwind",
+    "darkmode",
+    "javascript",
+    "ui"
+  ],
+  "author": "Abutalha373",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ABUTALHA373/ATscroll/issues"
+  },
+  "homepage": "https://github.com/ABUTALHA373/ATscroll#readme",
+  "devDependencies": {
+    "esbuild": "^0.25.5"
+  }
+}
