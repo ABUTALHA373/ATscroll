@@ -15,13 +15,12 @@ function ATscroll({
         .ats-container {
             position: relative !important;
             overflow: hidden !important;
+            padding-right: ${config.scrollbarWidth} !important;
         }
 
         .ats-scroll-content {
             overflow: auto !important;
             height: 100% !important;
-            width: 100% !important;
-            padding-right: ${config.scrollbarWidth} !important;
             box-sizing: content-box !important;
             -webkit-overflow-scrolling: touch !important;
         }
