@@ -1,6 +1,6 @@
 {
   "name": "atscroll",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A custom JavaScript scrollbar replacement with light/dark mode support and Tailwind compatibility.",
   "main": "dist/atscroll.min.js",
   "module": "src/atscroll.js",

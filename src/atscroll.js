@@ -6,57 +6,171 @@ function ATscroll({
 } = {}) {
     const config = { color, autoHide, scrollbarWidth };
 
+    // Create global style element with !important rules
     const style = document.createElement("style");
+    style.innerHTML = `
+        *::-webkit-scrollbar { display: none !important; }
+        * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
+
+        .ats-container {
+            position: relative !important;
+            overflow: hidden !important;
+        }
+
+        .ats-scroll-content {
+            overflow: auto !important;
+            height: 100% !important;
+            width: 100% !important;
+            padding-right: ${config.scrollbarWidth} !important;
+            box-sizing: content-box !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+
+        .ats-scrollbar {
+            position: absolute !important;
+            top: 0 !important;
+            right: 2px !important;
+            width: ${config.scrollbarWidth} !important;
+            border-radius: 3px !important;
+            transition: opacity 0.15s, height 0.15s, transform 0.15s !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            z-index: 9999 !important;
+            display: none !important;
+            background: ${color.light} !important;
+        }
+
+        .ats-scrollbar.visible {
+            display: block !important;
+            opacity: ${config.autoHide === "leave" ? "0" : "1"} !important;
+            pointer-events: ${config.autoHide === "leave" ? "none" : "auto"} !important;
+        }
+
+        ${config.autoHide === "leave" ? `
+            .ats-container:hover .ats-scrollbar.visible {
+                opacity: 1 !important;
+                pointer-events: auto !important;
+            }` : ""}
+
+        .dark .ats-scrollbar {
+            background: ${color.dark} !important;
+        }
+    `;
     document.head.appendChild(style);
 
-    function applyStyles() {
-        style.innerHTML = `
-      *::-webkit-scrollbar { display: none; }
-      * { scrollbar-width: none; -ms-overflow-style: none; }
+    // Track all wrapped elements (using both WeakMap and Set for iteration)
+    const wrappedElements = new WeakMap();
+    const wrappedElementsSet = new Set();
 
-      .ats-container {
-        position: relative;
-        overflow: hidden !important;
-      }
+    // Immediate update system with forced synchronous layout
+    function updateScrollbar(el) {
+        const data = wrappedElements.get(el);
+        if (!data) return;
 
-      .ats-scroll-content {
-        overflow: auto;
-        height: 100%;
-        width: 100%;
-        padding-right: ${config.scrollbarWidth};
-        box-sizing: content-box;
-      }
+        // Force synchronous layout calculation
+        const scrollHeight = el.scrollHeight;
+        const clientHeight = el.clientHeight;
+        const scrollable = scrollHeight > clientHeight + 1; // +1px tolerance
 
-      .ats-scrollbar {
-        position: absolute;
-        top: 0;
-        right: 2px;
-        width: ${config.scrollbarWidth};
-        border-radius: 3px;
-        transition: opacity 0.2s, background 0.3s;
-        opacity: ${config.autoHide === "leave" ? "0" : "1"};
-        pointer-events: ${config.autoHide === "leave" ? "none" : "auto"};
-        cursor: pointer;
-      }
+        if (scrollable) {
+            const ratio = clientHeight / scrollHeight;
+            const barHeight = Math.max(data.wrapper.clientHeight * ratio, 20);
+            const top = Math.min(
+                el.scrollTop * ratio,
+                data.wrapper.clientHeight - barHeight
+            );
 
-      ${config.autoHide === "leave" ? `
-        .ats-container:hover .ats-scrollbar.visible {
-          opacity: 1;
-          pointer-events: auto;
-        }` : ""}
-    `;
+            data.bar.style.height = `${barHeight}px`;
+            data.bar.style.transform = `translateY(${top}px)`;
+            data.bar.classList.add("visible");
+        } else {
+            data.bar.style.height = "0px";
+            data.bar.classList.remove("visible");
+        }
     }
 
-    function isDarkMode() {
-        return document.documentElement.classList.contains("dark");
+    // Global event listener for instant updates
+    function handleGlobalEvent() {
+        wrappedElementsSet.forEach(el => {
+            // Force synchronous update
+            void el.offsetHeight; // Trigger layout
+            updateScrollbar(el);
+        });
     }
 
-    function setScrollbarColor(bar) {
-        bar.style.background = isDarkMode() ? config.color.dark : config.color.light;
-    }
+    // Set up global event listeners with a 20ms timeout as requested
+    const events = [
+        'click', 'mousedown', 'mouseup', 'keydown', 'keyup',
+        'input', 'change', 'focus', 'blur', 'scroll',
+        'touchstart', 'touchend', 'resize'
+    ];
+
+    events.forEach(event => {
+        document.addEventListener(event, () => {
+            setTimeout(handleGlobalEvent, 20);
+        }, { passive: true });
+    });
+
+    // Ultra-sensitive DOM observer
+    const domObserver = new MutationObserver(mutations => {
+        const affectedElements = new Set();
+
+        mutations.forEach(mutation => {
+            // Check target node
+            if (mutation.target.nodeType === Node.ELEMENT_NODE) {
+                let parent = mutation.target;
+                while (parent) {
+                    if (wrappedElements.has(parent)) {
+                        affectedElements.add(parent);
+                    }
+                    parent = parent.parentElement;
+                }
+            }
+
+            // Check added/removed nodes
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    let parent = node;
+                    while (parent) {
+                        if (wrappedElements.has(parent)) {
+                            affectedElements.add(parent);
+                        }
+                        parent = parent.parentElement;
+                    }
+                }
+            });
+
+            mutation.removedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    let parent = node;
+                    while (parent) {
+                        if (wrappedElements.has(parent)) {
+                            affectedElements.add(parent);
+                        }
+                        parent = parent.parentElement;
+                    }
+                }
+            });
+        });
+
+        affectedElements.forEach(el => {
+            // Immediate update with forced layout
+            void el.offsetHeight;
+            updateScrollbar(el);
+        });
+    });
+
+    // Start observing the entire document
+    domObserver.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        characterData: true,
+        attributeFilter: ['style', 'class', 'id']
+    });
 
     function wrapElement(el) {
-        if (el.dataset.ats === "applied") return;
+        if (wrappedElements.has(el)) return;
 
         const wrapper = document.createElement("div");
         wrapper.classList.add("ats-container");
@@ -64,16 +178,14 @@ function ATscroll({
         wrapper.appendChild(el);
 
         el.classList.add("ats-scroll-content");
-        el.dataset.ats = "applied";
 
         const bar = document.createElement("div");
         bar.classList.add("ats-scrollbar");
         wrapper.appendChild(bar);
 
-        setScrollbarColor(bar);
-
         let isDragging = false, startY, startScrollTop;
 
+        // Drag handling
         bar.addEventListener("mousedown", (e) => {
             isDragging = true;
             startY = e.clientY;
@@ -82,74 +194,139 @@ function ATscroll({
             e.preventDefault();
         });
 
-        document.addEventListener("mousemove", (e) => {
+        const handleMouseMove = (e) => {
             if (!isDragging) return;
             const dy = e.clientY - startY;
             const scrollRatio = el.scrollHeight / el.clientHeight;
             el.scrollTop = startScrollTop + dy * scrollRatio;
+            updateScrollbar(el);
+        };
+
+        const handleMouseUp = () => {
+            isDragging = false;
+            document.body.style.userSelect = "";
+            updateScrollbar(el);
+        };
+
+        document.addEventListener("mousemove", handleMouseMove);
+        document.addEventListener("mouseup", handleMouseUp);
+
+        // Watch for element size changes
+        const resizeObserver = new ResizeObserver(() => {
+            void el.offsetHeight; // Force layout
+            updateScrollbar(el);
         });
-
-        document.addEventListener("mouseup", () => {
-            if (isDragging) {
-                isDragging = false;
-                document.body.style.userSelect = "";
-            }
-        });
-
-        function update() {
-            const scrollable = el.scrollHeight > el.clientHeight;
-            if (!scrollable) {
-                bar.classList.remove("visible");
-                return;
-            }
-
-            const ratio = el.clientHeight / el.scrollHeight;
-            const barHeight = wrapper.clientHeight * ratio;
-            const top = el.scrollTop * (wrapper.clientHeight / el.scrollHeight);
-
-            bar.style.height = `${barHeight}px`;
-            bar.style.transform = `translateY(${top}px)`;
-            bar.classList.add("visible");
-        }
-
-        function scheduleUpdate() {
-            if (el._atsRaf) cancelAnimationFrame(el._atsRaf);
-            el._atsRaf = requestAnimationFrame(update);
-        }
-
-        el.addEventListener("scroll", update);
-        window.addEventListener("resize", scheduleUpdate);
-
-        const resizeObserver = new ResizeObserver(scheduleUpdate);
         resizeObserver.observe(el);
         resizeObserver.observe(wrapper);
 
-        const mutationObserver = new MutationObserver(scheduleUpdate);
-        mutationObserver.observe(el, { childList: true, subtree: true, characterData: true });
+        // Watch for scroll events
+        el.addEventListener("scroll", () => {
+            void el.offsetHeight; // Force layout
+            updateScrollbar(el);
+        }, { passive: true });
 
-        const classObserver = new MutationObserver(() => setScrollbarColor(bar));
-        classObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+        // Store element references
+        const elementData = {
+            wrapper,
+            bar,
+            observers: [resizeObserver],
+            listeners: [handleMouseMove, handleMouseUp]
+        };
 
-        update();
+        wrappedElements.set(el, elementData);
+        wrappedElementsSet.add(el);
+
+        // Initial update with forced layout
+        setTimeout(() => {
+            void el.offsetHeight;
+            updateScrollbar(el);
+        }, 0);
     }
 
+    // Initialize scrollbars on matching elements
     function init() {
-        applyStyles();
+        const scrollableSelectors = [
+            "body",
+            "[class*='overflow-']",
+            "[data-scrollable]",
+            ".scrollable",
+            ".scroll-container"
+        ].join(",");
 
-        const candidates = [...document.querySelectorAll("body, [class*='overflow-']")];
-        candidates.forEach(el => {
+        // Process existing elements
+        document.querySelectorAll(scrollableSelectors).forEach(el => {
             const style = window.getComputedStyle(el);
             if (style.overflowY === "auto" || style.overflowY === "scroll") {
                 wrapElement(el);
             }
         });
 
-        const globalObserver = new MutationObserver(() => init());
-        globalObserver.observe(document.body, { childList: true, subtree: true });
+        // Watch for new elements
+        const elementObserver = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const elements = Array.from(node.querySelectorAll(scrollableSelectors))
+                            .concat(node.matches(scrollableSelectors) ? [node] : []);
+
+                        elements.forEach(el => {
+                            const style = window.getComputedStyle(el);
+                            if (style.overflowY === "auto" || style.overflowY === "scroll") {
+                                wrapElement(el);
+                                void el.offsetHeight;
+                                updateScrollbar(el);
+                            }
+                        });
+                    }
+                });
+            });
+        });
+
+        elementObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 
-    // 👇 Auto-initialize
-    init();
+    // Initialize when ready
+    if (document.readyState === "complete") {
+        init();
+    } else {
+        document.addEventListener("DOMContentLoaded", init);
+    }
+
+    // Return cleanup API
+    return {
+        destroy: () => {
+            domObserver.disconnect();
+            events.forEach(event => {
+                document.removeEventListener(event, handleGlobalEvent);
+            });
+
+            wrappedElementsSet.forEach(el => {
+                const data = wrappedElements.get(el);
+                if (data) {
+                    data.observers.forEach(obs => obs.disconnect());
+                    document.removeEventListener("mousemove", data.listeners[0]);
+                    document.removeEventListener("mouseup", data.listeners[1]);
+                    el.removeEventListener("scroll", updateScrollbar);
+
+                    if (data.wrapper && data.wrapper.parentNode) {
+                        data.wrapper.parentNode.insertBefore(el, data.wrapper);
+                        data.wrapper.parentNode.removeChild(data.wrapper);
+                    }
+
+                    el.classList.remove("ats-scroll-content");
+                }
+            });
+
+            wrappedElementsSet.clear();
+
+            if (style.parentNode) {
+                style.parentNode.removeChild(style);
+            }
+        }
+    };
 };
 
 export default ATscroll;
