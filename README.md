@@ -39,3 +39,58 @@ ATscroll({
   scrollbarWidth: "6px",
 });
 ```
+##Usage
+Just call ATscroll() with options. It automatically finds:
+
+- The <body> element
+- All elements with Tailwind overflow classes (overflow-auto, overflow-scroll, etc.) and replaces native scrollbars with custom ones.
+
+```bash
+import ATscroll from 'atscroll';
+
+ATscroll({
+  color: {
+    light: "#aabbcc",  // light mode scrollbar color
+    dark: "#334455",   // dark mode scrollbar color
+  },
+  autoHide: "none",    // "none" or "leave"
+  scrollbarWidth: "8px"
+});
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `color` | `{ light: string, dark: string }` | `{ light: "#00000033", dark: "#ffffff33" }` | Scrollbar colors for light/dark modes (supports any CSS color value) |
+| `autoHide` | `"none"` \| `"leave"` | `"leave"` | `"none"` = always visible, `"leave"` = hides when mouse leaves container |
+| `scrollbarWidth` | `string` | `"6px"` | Width of the scrollbar track (must include px/rem units) |
+
+##Tailwind CSS Integration
+Make sure you enable class-based dark mode in your Tailwind config:
+```bash
+// tailwind.config.js
+module.exports = {
+  darkMode: "class",
+  // other configs...
+}
+```
+Use the dark class on <html> or <body> to enable dark mode:
+```bash
+<html class="dark">
+```
+
+##How It Works
+- Wraps each scrollable element (body and any with Tailwind overflow classes) in a container
+- Hides native scrollbar via CSS globally
+- Adds a custom scrollbar element absolutely positioned on the right side
+- Calculates scrollbar size and position based on scrollable content
+- Updates dynamically on scroll, resize, or content mutation using ResizeObserver and MutationObserver
+- Supports drag to scroll by dragging the scrollbar thumb
+- Changes scrollbar color automatically according to light/dark mode
+
+## License
+MIT © [Abu Talha](https://github.com/ABUTALHA373)
+
+## Contact
+- GitHub: [Abu Talha](https://github.com/ABUTALHA373)
