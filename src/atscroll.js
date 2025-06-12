@@ -14,11 +14,11 @@ function ATscroll({
 
         .ats-container {
             position: relative !important;
-            overflow: hidden !important;
+            ${config.autoHide === "leave" ? "overflow: hidden !important;" : ""}
             padding-right: ${config.scrollbarWidth} !important;
         }
 
-        .ats-scroll-content {
+        .ats-container:not(body) .ats-scroll-content {
             overflow: auto !important;
             height: 100% !important;
             box-sizing: content-box !important;
@@ -26,7 +26,7 @@ function ATscroll({
         }
 
         .ats-scrollbar {
-            position: absolute !important;
+            position: fixed !important; /* Use fixed for body */
             top: 0 !important;
             right: 2px !important;
             width: ${config.scrollbarWidth} !important;
@@ -39,6 +39,10 @@ function ATscroll({
             background: ${color.light} !important;
         }
 
+        .ats-container:not(body) .ats-scrollbar {
+            position: absolute !important; /* Use absolute for non-body elements */
+        }
+
         .ats-scrollbar.visible {
             display: block !important;
             opacity: ${config.autoHide === "leave" ? "0" : "1"} !important;
@@ -46,7 +50,8 @@ function ATscroll({
         }
 
         ${config.autoHide === "leave" ? `
-            .ats-container:hover .ats-scrollbar.visible {
+            .ats-container:hover .ats-scrollbar.visible,
+            body.ats-container:hover .ats-scrollbar.visible {
                 opacity: 1 !important;
                 pointer-events: auto !important;
             }` : ""}
@@ -66,16 +71,25 @@ function ATscroll({
         const data = wrappedElements.get(el);
         if (!data) return;
 
-        // Force synchronous layout calculation
-        const scrollHeight = el.scrollHeight;
-        const clientHeight = el.clientHeight;
+        let scrollHeight, clientHeight, scrollTop;
+
+        if (el === document.body) {
+            scrollHeight = document.documentElement.scrollHeight;
+            clientHeight = window.innerHeight;
+            scrollTop = window.scrollY || document.documentElement.scrollTop;
+        } else {
+            scrollHeight = el.scrollHeight;
+            clientHeight = el.clientHeight;
+            scrollTop = el.scrollTop;
+        }
+
         const scrollable = scrollHeight > clientHeight + 1; // +1px tolerance
 
         if (scrollable) {
             const ratio = clientHeight / scrollHeight;
             const barHeight = Math.max(data.wrapper.clientHeight * ratio, 20);
             const top = Math.min(
-                el.scrollTop * ratio,
+                scrollTop * ratio,
                 data.wrapper.clientHeight - barHeight
             );
 
@@ -171,16 +185,26 @@ function ATscroll({
     function wrapElement(el) {
         if (wrappedElements.has(el)) return;
 
-        const wrapper = document.createElement("div");
-        wrapper.classList.add("ats-container");
-        el.parentNode.insertBefore(wrapper, el);
-        wrapper.appendChild(el);
+        let wrapper, bar;
+        if (el === document.body) {
+            // Don't wrap body, use it directly
+            wrapper = el;
+            wrapper.classList.add("ats-container");
 
-        el.classList.add("ats-scroll-content");
+            bar = document.createElement("div");
+            bar.classList.add("ats-scrollbar");
+            document.body.appendChild(bar);
+        } else {
+            wrapper = document.createElement("div");
+            wrapper.classList.add("ats-container");
+            el.parentNode.insertBefore(wrapper, el);
+            wrapper.appendChild(el);
 
-        const bar = document.createElement("div");
-        bar.classList.add("ats-scrollbar");
-        wrapper.appendChild(bar);
+            el.classList.add("ats-scroll-content");
+            bar = document.createElement("div");
+            bar.classList.add("ats-scrollbar");
+            wrapper.appendChild(bar);
+        }
 
         let isDragging = false, startY, startScrollTop;
 
@@ -188,7 +212,7 @@ function ATscroll({
         bar.addEventListener("mousedown", (e) => {
             isDragging = true;
             startY = e.clientY;
-            startScrollTop = el.scrollTop;
+            startScrollTop = el === document.body ? window.scrollY : el.scrollTop;
             document.body.style.userSelect = "none";
             e.preventDefault();
         });
@@ -196,8 +220,12 @@ function ATscroll({
         const handleMouseMove = (e) => {
             if (!isDragging) return;
             const dy = e.clientY - startY;
-            const scrollRatio = el.scrollHeight / el.clientHeight;
-            el.scrollTop = startScrollTop + dy * scrollRatio;
+            const scrollRatio = (el === document.body ? document.documentElement.scrollHeight / window.innerHeight : el.scrollHeight / el.clientHeight);
+            if (el === document.body) {
+                window.scrollTo(0, startScrollTop + dy * scrollRatio);
+            } else {
+                el.scrollTop = startScrollTop + dy * scrollRatio;
+            }
             updateScrollbar(el);
         };
 
@@ -216,20 +244,27 @@ function ATscroll({
             updateScrollbar(el);
         });
         resizeObserver.observe(el);
-        resizeObserver.observe(wrapper);
+        if (el !== document.body) {
+            resizeObserver.observe(wrapper);
+        }
 
         // Watch for scroll events
-        el.addEventListener("scroll", () => {
+        const scrollHandler = () => {
             void el.offsetHeight; // Force layout
             updateScrollbar(el);
-        }, { passive: true });
+        };
+        if (el === document.body) {
+            window.addEventListener("scroll", scrollHandler, { passive: true });
+        } else {
+            el.addEventListener("scroll", scrollHandler, { passive: true });
+        }
 
         // Store element references
         const elementData = {
             wrapper,
             bar,
             observers: [resizeObserver],
-            listeners: [handleMouseMove, handleMouseUp]
+            listeners: [handleMouseMove, handleMouseUp, scrollHandler]
         };
 
         wrappedElements.set(el, elementData);
@@ -254,13 +289,20 @@ function ATscroll({
 
         // Process existing elements
         document.querySelectorAll(scrollableSelectors).forEach(el => {
-            const style = window.getComputedStyle(el);
-            if (style.overflowY === "auto" || style.overflowY === "scroll") {
-                wrapElement(el);
+            if (el === document.body) {
+                // Special case for body: check document scrollability
+                if (document.documentElement.scrollHeight > window.innerHeight) {
+                    wrapElement(el);
+                }
+            } else {
+                const style = window.getComputedStyle(el);
+                if (style.overflowY === "auto" || style.overflowY === "scroll") {
+                    wrapElement(el);
+                }
             }
         });
 
-        // Watch for new elements
+        // Watch for new elements and body scrollability changes
         const elementObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
@@ -269,11 +311,19 @@ function ATscroll({
                             .concat(node.matches(scrollableSelectors) ? [node] : []);
 
                         elements.forEach(el => {
-                            const style = window.getComputedStyle(el);
-                            if (style.overflowY === "auto" || style.overflowY === "scroll") {
-                                wrapElement(el);
-                                void el.offsetHeight;
-                                updateScrollbar(el);
+                            if (el === document.body) {
+                                if (document.documentElement.scrollHeight > window.innerHeight) {
+                                    wrapElement(el);
+                                    void el.offsetHeight;
+                                    updateScrollbar(el);
+                                }
+                            } else {
+                                const style = window.getComputedStyle(el);
+                                if (style.overflowY === "auto" || style.overflowY === "scroll") {
+                                    wrapElement(el);
+                                    void el.offsetHeight;
+                                    updateScrollbar(el);
+                                }
                             }
                         });
                     }
@@ -285,6 +335,20 @@ function ATscroll({
             childList: true,
             subtree: true
         });
+
+        // Watch for window resize to update body scrollability
+        window.addEventListener("resize", () => {
+            if (document.documentElement.scrollHeight > window.innerHeight) {
+                wrapElement(document.body);
+                void document.body.offsetHeight;
+                updateScrollbar(document.body);
+            } else {
+                const data = wrappedElements.get(document.body);
+                if (data) {
+                    data.bar.classList.remove("visible");
+                }
+            }
+        }, { passive: true });
     }
 
     // Initialize when ready
@@ -308,14 +372,24 @@ function ATscroll({
                     data.observers.forEach(obs => obs.disconnect());
                     document.removeEventListener("mousemove", data.listeners[0]);
                     document.removeEventListener("mouseup", data.listeners[1]);
-                    el.removeEventListener("scroll", updateScrollbar);
-
-                    if (data.wrapper && data.wrapper.parentNode) {
-                        data.wrapper.parentNode.insertBefore(el, data.wrapper);
-                        data.wrapper.parentNode.removeChild(data.wrapper);
+                    if (el === document.body) {
+                        window.removeEventListener("scroll", data.listeners[2]);
+                    } else {
+                        el.removeEventListener("scroll", data.listeners[2]);
                     }
 
-                    el.classList.remove("ats-scroll-content");
+                    if (el === document.body) {
+                        if (data.bar && data.bar.parentNode) {
+                            data.bar.parentNode.removeChild(data.bar);
+                        }
+                        el.classList.remove("ats-container");
+                    } else {
+                        if (data.wrapper && data.wrapper.parentNode) {
+                            data.wrapper.parentNode.insertBefore(el, data.wrapper);
+                            data.wrapper.parentNode.removeChild(data.wrapper);
+                        }
+                        el.classList.remove("ats-scroll-content");
+                    }
                 }
             });
 
