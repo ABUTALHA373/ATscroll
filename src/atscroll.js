@@ -9,6 +9,11 @@ function ATscroll({
     // Create global style element with !important rules
     const style = document.createElement("style");
     style.innerHTML = `
+        html, body {
+            height: 100% !important;
+            overflow: auto !important;
+            margin: 0 !important;
+        }
         *::-webkit-scrollbar { display: none !important; }
         * { scrollbar-width: none !important; -ms-overflow-style: none !important; }
 
@@ -27,8 +32,8 @@ function ATscroll({
 
         .ats-scrollbar {
             position: fixed !important; /* Use fixed for body */
-            top: 0 !important;
-            right: 2px !important;
+            top: 2px !important;
+            right: 4px !important; /* Adjusted for better visibility */
             width: ${config.scrollbarWidth} !important;
             border-radius: 3px !important;
             transition: opacity 0.15s, height 0.15s, transform 0.15s !important;
@@ -111,7 +116,7 @@ function ATscroll({
         });
     }
 
-    // Set up global event listeners with a 20ms timeout as requested
+    // Set up global event listeners with a 20ms timeout
     const events = [
         'click', 'mousedown', 'mouseup', 'keydown', 'keyup',
         'input', 'change', 'focus', 'blur', 'scroll',
@@ -287,17 +292,24 @@ function ATscroll({
             ".scroll-container"
         ].join(",");
 
+        function checkAndWrapBody() {
+            if (document.documentElement.scrollHeight > window.innerHeight) {
+                wrapElement(document.body);
+                void document.body.offsetHeight; // Force layout
+                updateScrollbar(document.body);
+            }
+        }
+
         // Process existing elements
         document.querySelectorAll(scrollableSelectors).forEach(el => {
             if (el === document.body) {
-                // Special case for body: check document scrollability
-                if (document.documentElement.scrollHeight > window.innerHeight) {
-                    wrapElement(el);
-                }
+                checkAndWrapBody();
             } else {
                 const style = window.getComputedStyle(el);
                 if (style.overflowY === "auto" || style.overflowY === "scroll") {
                     wrapElement(el);
+                    void el.offsetHeight;
+                    updateScrollbar(el);
                 }
             }
         });
@@ -312,11 +324,7 @@ function ATscroll({
 
                         elements.forEach(el => {
                             if (el === document.body) {
-                                if (document.documentElement.scrollHeight > window.innerHeight) {
-                                    wrapElement(el);
-                                    void el.offsetHeight;
-                                    updateScrollbar(el);
-                                }
+                                checkAndWrapBody();
                             } else {
                                 const style = window.getComputedStyle(el);
                                 if (style.overflowY === "auto" || style.overflowY === "scroll") {
@@ -328,6 +336,8 @@ function ATscroll({
                         });
                     }
                 });
+                // Recheck body scrollability on any mutation
+                checkAndWrapBody();
             });
         });
 
@@ -336,19 +346,13 @@ function ATscroll({
             subtree: true
         });
 
-        // Watch for window resize to update body scrollability
+        // Watch for window resize or dynamic content changes
         window.addEventListener("resize", () => {
-            if (document.documentElement.scrollHeight > window.innerHeight) {
-                wrapElement(document.body);
-                void document.body.offsetHeight;
-                updateScrollbar(document.body);
-            } else {
-                const data = wrappedElements.get(document.body);
-                if (data) {
-                    data.bar.classList.remove("visible");
-                }
-            }
+            checkAndWrapBody();
         }, { passive: true });
+
+        // Periodically check body scrollability for dynamic content
+        setInterval(checkAndWrapBody, 500); // Adjust interval as needed
     }
 
     // Initialize when ready
@@ -358,7 +362,7 @@ function ATscroll({
         document.addEventListener("DOMContentLoaded", init);
     }
 
-    // Return cleanup API
+    // Return cleanup and update API
     return {
         destroy: () => {
             domObserver.disconnect();
@@ -398,6 +402,12 @@ function ATscroll({
             if (style.parentNode) {
                 style.parentNode.removeChild(style);
             }
+        },
+        update: () => {
+            wrappedElementsSet.forEach(el => {
+                void el.offsetHeight;
+                updateScrollbar(el);
+            });
         }
     };
 };
