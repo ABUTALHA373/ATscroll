@@ -10,7 +10,7 @@ function ATscroll({
     const style = document.createElement("style");
     style.innerHTML = `
         html, body {
-            height: 100% !important;
+            min-height: 100% !important;
             overflow: auto !important;
             margin: 0 !important;
         }
@@ -31,9 +31,9 @@ function ATscroll({
         }
 
         .ats-scrollbar {
-            position: fixed !important; /* Use fixed for body */
+            position: fixed !important;
             top: 2px !important;
-            right: 4px !important; /* Adjusted for better visibility */
+            right: 4px !important;
             width: ${config.scrollbarWidth} !important;
             border-radius: 3px !important;
             transition: opacity 0.15s, height 0.15s, transform 0.15s !important;
@@ -45,7 +45,7 @@ function ATscroll({
         }
 
         .ats-container:not(body) .ats-scrollbar {
-            position: absolute !important; /* Use absolute for non-body elements */
+            position: absolute !important;
         }
 
         .ats-scrollbar.visible {
@@ -64,14 +64,15 @@ function ATscroll({
         .dark .ats-scrollbar {
             background: ${color.dark} !important;
         }
+
+        /* Optional debug: make scrollbars red for testing */
+        /* .ats-scrollbar { background: red !important; opacity: 1 !important; display: block !important; } */
     `;
     document.head.appendChild(style);
 
-    // Track all wrapped elements (using both WeakMap and Set for iteration)
     const wrappedElements = new WeakMap();
     const wrappedElementsSet = new Set();
 
-    // Immediate update system with forced synchronous layout
     function updateScrollbar(el) {
         const data = wrappedElements.get(el);
         if (!data) return;
@@ -88,15 +89,12 @@ function ATscroll({
             scrollTop = el.scrollTop;
         }
 
-        const scrollable = scrollHeight > clientHeight + 1; // +1px tolerance
+        const scrollable = scrollHeight > clientHeight + 1;
 
         if (scrollable) {
             const ratio = clientHeight / scrollHeight;
             const barHeight = Math.max(data.wrapper.clientHeight * ratio, 20);
-            const top = Math.min(
-                scrollTop * ratio,
-                data.wrapper.clientHeight - barHeight
-            );
+            const top = Math.min(scrollTop * ratio, data.wrapper.clientHeight - barHeight);
 
             data.bar.style.height = `${barHeight}px`;
             data.bar.style.transform = `translateY(${top}px)`;
@@ -107,16 +105,13 @@ function ATscroll({
         }
     }
 
-    // Global event listener for instant updates
     function handleGlobalEvent() {
         wrappedElementsSet.forEach(el => {
-            // Force synchronous update
-            void el.offsetHeight; // Trigger layout
+            void el.offsetHeight;
             updateScrollbar(el);
         });
     }
 
-    // Set up global event listeners with a 20ms timeout
     const events = [
         'click', 'mousedown', 'mouseup', 'keydown', 'keyup',
         'input', 'change', 'focus', 'blur', 'scroll',
@@ -129,30 +124,23 @@ function ATscroll({
         }, { passive: true });
     });
 
-    // Ultra-sensitive DOM observer
     const domObserver = new MutationObserver(mutations => {
         const affectedElements = new Set();
 
         mutations.forEach(mutation => {
-            // Check target node
             if (mutation.target.nodeType === Node.ELEMENT_NODE) {
                 let parent = mutation.target;
                 while (parent) {
-                    if (wrappedElements.has(parent)) {
-                        affectedElements.add(parent);
-                    }
+                    if (wrappedElements.has(parent)) affectedElements.add(parent);
                     parent = parent.parentElement;
                 }
             }
 
-            // Check added/removed nodes
             mutation.addedNodes.forEach(node => {
                 if (node.nodeType === Node.ELEMENT_NODE) {
                     let parent = node;
                     while (parent) {
-                        if (wrappedElements.has(parent)) {
-                            affectedElements.add(parent);
-                        }
+                        if (wrappedElements.has(parent)) affectedElements.add(parent);
                         parent = parent.parentElement;
                     }
                 }
@@ -162,9 +150,7 @@ function ATscroll({
                 if (node.nodeType === Node.ELEMENT_NODE) {
                     let parent = node;
                     while (parent) {
-                        if (wrappedElements.has(parent)) {
-                            affectedElements.add(parent);
-                        }
+                        if (wrappedElements.has(parent)) affectedElements.add(parent);
                         parent = parent.parentElement;
                     }
                 }
@@ -172,13 +158,11 @@ function ATscroll({
         });
 
         affectedElements.forEach(el => {
-            // Immediate update with forced layout
             void el.offsetHeight;
             updateScrollbar(el);
         });
     });
 
-    // Start observing the entire document
     domObserver.observe(document.documentElement, {
         childList: true,
         subtree: true,
@@ -192,13 +176,12 @@ function ATscroll({
 
         let wrapper, bar;
         if (el === document.body) {
-            // Don't wrap body, use it directly
             wrapper = el;
             wrapper.classList.add("ats-container");
 
             bar = document.createElement("div");
             bar.classList.add("ats-scrollbar");
-            document.body.appendChild(bar);
+            document.documentElement.appendChild(bar);
         } else {
             wrapper = document.createElement("div");
             wrapper.classList.add("ats-container");
@@ -213,7 +196,6 @@ function ATscroll({
 
         let isDragging = false, startY, startScrollTop;
 
-        // Drag handling
         bar.addEventListener("mousedown", (e) => {
             isDragging = true;
             startY = e.clientY;
@@ -225,7 +207,9 @@ function ATscroll({
         const handleMouseMove = (e) => {
             if (!isDragging) return;
             const dy = e.clientY - startY;
-            const scrollRatio = (el === document.body ? document.documentElement.scrollHeight / window.innerHeight : el.scrollHeight / el.clientHeight);
+            const scrollRatio = (el === document.body
+                ? document.documentElement.scrollHeight / window.innerHeight
+                : el.scrollHeight / el.clientHeight);
             if (el === document.body) {
                 window.scrollTo(0, startScrollTop + dy * scrollRatio);
             } else {
@@ -243,19 +227,15 @@ function ATscroll({
         document.addEventListener("mousemove", handleMouseMove);
         document.addEventListener("mouseup", handleMouseUp);
 
-        // Watch for element size changes
         const resizeObserver = new ResizeObserver(() => {
-            void el.offsetHeight; // Force layout
+            void el.offsetHeight;
             updateScrollbar(el);
         });
         resizeObserver.observe(el);
-        if (el !== document.body) {
-            resizeObserver.observe(wrapper);
-        }
+        if (el !== document.body) resizeObserver.observe(wrapper);
 
-        // Watch for scroll events
         const scrollHandler = () => {
-            void el.offsetHeight; // Force layout
+            void el.offsetHeight;
             updateScrollbar(el);
         };
         if (el === document.body) {
@@ -264,7 +244,6 @@ function ATscroll({
             el.addEventListener("scroll", scrollHandler, { passive: true });
         }
 
-        // Store element references
         const elementData = {
             wrapper,
             bar,
@@ -275,14 +254,12 @@ function ATscroll({
         wrappedElements.set(el, elementData);
         wrappedElementsSet.add(el);
 
-        // Initial update with forced layout
         setTimeout(() => {
             void el.offsetHeight;
             updateScrollbar(el);
         }, 0);
     }
 
-    // Initialize scrollbars on matching elements
     function init() {
         const scrollableSelectors = [
             "body",
@@ -295,12 +272,11 @@ function ATscroll({
         function checkAndWrapBody() {
             if (document.documentElement.scrollHeight > window.innerHeight) {
                 wrapElement(document.body);
-                void document.body.offsetHeight; // Force layout
+                void document.body.offsetHeight;
                 updateScrollbar(document.body);
             }
         }
 
-        // Process existing elements
         document.querySelectorAll(scrollableSelectors).forEach(el => {
             if (el === document.body) {
                 checkAndWrapBody();
@@ -314,14 +290,12 @@ function ATscroll({
             }
         });
 
-        // Watch for new elements and body scrollability changes
         const elementObserver = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         const elements = Array.from(node.querySelectorAll(scrollableSelectors))
                             .concat(node.matches(scrollableSelectors) ? [node] : []);
-
                         elements.forEach(el => {
                             if (el === document.body) {
                                 checkAndWrapBody();
@@ -336,7 +310,6 @@ function ATscroll({
                         });
                     }
                 });
-                // Recheck body scrollability on any mutation
                 checkAndWrapBody();
             });
         });
@@ -346,23 +319,12 @@ function ATscroll({
             subtree: true
         });
 
-        // Watch for window resize or dynamic content changes
-        window.addEventListener("resize", () => {
-            checkAndWrapBody();
-        }, { passive: true });
-
-        // Periodically check body scrollability for dynamic content
-        setInterval(checkAndWrapBody, 500); // Adjust interval as needed
+        window.addEventListener("resize", checkAndWrapBody, { passive: true });
+        setInterval(checkAndWrapBody, 500);
     }
 
-    // Initialize when ready
-    if (document.readyState === "complete") {
-        init();
-    } else {
-        document.addEventListener("DOMContentLoaded", init);
-    }
+    window.addEventListener("load", init); // Load everything including images
 
-    // Return cleanup and update API
     return {
         destroy: () => {
             domObserver.disconnect();
@@ -378,17 +340,13 @@ function ATscroll({
                     document.removeEventListener("mouseup", data.listeners[1]);
                     if (el === document.body) {
                         window.removeEventListener("scroll", data.listeners[2]);
-                    } else {
-                        el.removeEventListener("scroll", data.listeners[2]);
-                    }
-
-                    if (el === document.body) {
-                        if (data.bar && data.bar.parentNode) {
+                        if (data.bar?.parentNode) {
                             data.bar.parentNode.removeChild(data.bar);
                         }
                         el.classList.remove("ats-container");
                     } else {
-                        if (data.wrapper && data.wrapper.parentNode) {
+                        el.removeEventListener("scroll", data.listeners[2]);
+                        if (data.wrapper?.parentNode) {
                             data.wrapper.parentNode.insertBefore(el, data.wrapper);
                             data.wrapper.parentNode.removeChild(data.wrapper);
                         }
@@ -410,6 +368,6 @@ function ATscroll({
             });
         }
     };
-};
+}
 
 export default ATscroll;
